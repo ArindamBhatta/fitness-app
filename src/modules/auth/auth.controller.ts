@@ -1,0 +1,58 @@
+import {
+  Controller,
+  Post,
+  Body,
+  HttpCode,
+  HttpStatus,
+  UseGuards,
+  Req,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { AuthService } from './auth.service';
+import { SignupDto } from './dto/signup.dto';
+import { LoginDto } from './dto/login.dto';
+import { Tokens } from './types/tokens.type';
+import { AtGuard } from './guards/at.guard';
+import { RtGuard } from './guards/rt.guard';
+
+@ApiTags('auth')
+@Controller('auth')
+export class AuthController {
+  constructor(private authService: AuthService) { }
+
+  @Post('signup')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Register a new user' })
+  @ApiResponse({ status: 201, description: 'User successfully registered' })
+  signup(@Body() dto: SignupDto): Promise<Tokens> {
+    return this.authService.signup(dto);
+  }
+
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Login and receive tokens' })
+  @ApiResponse({ status: 200, description: 'Successfully logged in' })
+  login(@Body() dto: LoginDto): Promise<Tokens> {
+    return this.authService.login(dto);
+  }
+  //You must be logged in to log out.
+  @UseGuards(AtGuard)
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Logout and invalidate refresh token' })
+  logout(@Req() req: any) {
+    const user = req.user;
+    return this.authService.logout(user['sub']);
+  }
+  //You must have a valid Refresh Token to get new tokens.
+  @UseGuards(RtGuard)
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Refresh access token using refresh token' })
+  refreshTokens(@Req() req: any) {
+    const user = req.user;
+    return this.authService.refreshTokens(user['sub'], user['refreshToken']);
+  }
+}
