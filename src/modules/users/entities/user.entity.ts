@@ -4,6 +4,7 @@ import { Pincode } from '../../shared/entities/pincode.entity';
 
 @Entity('users')
 export class User {
+  //primary key
   @PrimaryGeneratedColumn({ name: 'user_id' })
   @ApiProperty({ example: 1 })
   userId: number;
@@ -12,6 +13,7 @@ export class User {
   @ApiProperty({ example: 'John Doe' })
   fullName: string;
 
+  //Normal DB field
   @Column({ unique: true })
   @ApiProperty({ example: 'user@example.com' })
   email: string;

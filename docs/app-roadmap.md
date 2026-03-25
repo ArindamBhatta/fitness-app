@@ -10,7 +10,7 @@ Current Status: **Phase 1 (Database & Entities) is Complete.**
 ## Phase 3: Advanced Authentication
 - [ ] Implement Role-Based Access Control (RBAC).
 - [ ] Separate logic for `CANDIDATE` and `EMPLOYER` roles.
-- [ ] Implement Password hashing (Bcrypt).
+- [x] Implement Password hashing (Bcrypt).
 
 ## Phase 4: Business Logic
 - [ ] Job Matching algorithm (Match skills to job requirements).

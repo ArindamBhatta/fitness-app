@@ -1,103 +1,92 @@
-import { Injectable, ForbiddenException, BadRequestException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { UsersService } from '../users/users.service';
-import { SignupDto } from './dto/signup.dto';
-import { LoginDto } from './dto/login.dto';
-import { Tokens } from './types/tokens.type';
+import { JwtService } from "@nestjs/jwt";
+import { UserService } from "../users/users.service";
+import { SignupDto } from "./dto/signup.dto";
+import { Tokens } from "./types/tokens.type";
+import { BadRequestException, ForbiddenException, Injectable } from "@nestjs/common";
 import * as bcrypt from 'bcrypt';
+import { LoginDto } from "./dto/login.dto";
+import { use } from "passport";
 
 @Injectable()
 export class AuthService {
-  constructor(
-    private usersService: UsersService,
-    private jwtService: JwtService,
-  ) { }
+    constructor(
+        private usersService: UserService,
+        private jwtService: JwtService,
+    ) { }
 
-  async signup(dto: SignupDto): Promise<Tokens> {
-    const existingUser = await this.usersService.findByEmail(dto.email);
-    if (existingUser) {
-      throw new BadRequestException('User already exists');
+    //utility methods
+
+    hashData(data: string) {
+        return bcrypt.hash(data, 10)
     }
 
-    const hashedPassword = await this.hashData(dto.password);
-    const newUser = await this.usersService.create({
-      email: dto.email,
-      password: hashedPassword,
-    });
+    async getTokens(userId: number, email: string): Promise<Tokens> {
 
-    const tokens = await this.getTokens(newUser.userId, newUser.email);
-    await this.updateRtHash(newUser.userId, tokens.refresh_token);
+        const [at, rt] = await Promise.all([
+            this.jwtService.signAsync({
+                sub: userId,
+                email: email
+            }, {
+                secret: process.env.AT_SECRET || 'at-secret',
+                expiresIn: '15m'
+            }),
 
-    return tokens;
-  }
+            this.jwtService.signAsync({
+                sub: userId,
+                email: email
+            }, {
+                secret: process.env.RT_SECRET || 'rt-service',
+                expiresIn: '7d',
+            })
+        ]);
 
-  async login(dto: LoginDto): Promise<Tokens> {
-    const user = await this.usersService.findByEmail(dto.email);
-    if (!user) throw new ForbiddenException('Access Denied');
+        return {
+            access_token: at,
+            refresh_token: rt
+        }
+    }
 
-    const passwordMatches = await bcrypt.compare(dto.password, user.password);
-    if (!passwordMatches) throw new ForbiddenException('Access Denied');
+    async updateRtHash(userId: number, rt: string) {
+        const hash = await this.hashData(rt);
+        await this.usersService.update(userId, { refreshToken: hash });
+    }
 
-    const tokens = await this.getTokens(user.userId, user.email);
-    await this.updateRtHash(user.userId, tokens.refresh_token);
 
-    return tokens;
-  }
 
-  async logout(userId: number): Promise<boolean> {
-    await this.usersService.update(userId, { refreshToken: null });
-    return true;
-  }
+    async signUp(dto: SignupDto) {
+        const existingUser = await this.usersService.findByEmail(dto.email);
+        if (!existingUser) {
+            throw new BadRequestException("User already exist");
+        }
 
-  async refreshTokens(userId: number, rt: string): Promise<Tokens> {
-    const user = await this.usersService.findById(userId);
-    if (!user || !user.refreshToken) throw new ForbiddenException('Access Denied');
+        const hashPassword: string = await this.hashData(dto.password);
 
-    const rtMatches = await bcrypt.compare(rt, user.refreshToken);
-    if (!rtMatches) throw new ForbiddenException('Access Denied');
+        const newUser = await this.usersService.create({
+            email: dto.email,
+            password: hashPassword
+        });
 
-    const tokens = await this.getTokens(user.userId, user.email);
-    await this.updateRtHash(user.userId, tokens.refresh_token);
+        const token = await this.getTokens(newUser.userId, newUser.email);
+        await this.updateRtHash(newUser.userId, token.refresh_token)
 
-    return tokens;
-  }
+        return token;
+    }
 
-  async updateRtHash(userId: number, rt: string): Promise<void> {
-    const hash = await this.hashData(rt);
-    await this.usersService.update(userId, { refreshToken: hash });
-  }
+    async login(dto: LoginDto): Promise<Tokens> {
+        const user = await this.usersService.findByEmail(dto.email);
+        if (!user) throw new ForbiddenException('Access Denied');
 
-  hashData(data: string) {
-    return bcrypt.hash(data, 10);
-  }
+        //password match
+        const passwordMatches = await bcrypt.compare(dto.password, user.password);
+        if (!passwordMatches) throw new ForbiddenException('Access Denied');
 
-  async getTokens(userId: number, email: string): Promise<Tokens> {
-    const [at, rt] = await Promise.all([
-      this.jwtService.signAsync(
-        {
-          sub: userId,
-          email,
-        },
-        {
-          secret: process.env.AT_SECRET || 'at-secret',
-          expiresIn: '15m',
-        },
-      ),
-      this.jwtService.signAsync(
-        {
-          sub: userId,
-          email,
-        },
-        {
-          secret: process.env.RT_SECRET || 'rt-secret',
-          expiresIn: '7d',
-        },
-      ),
-    ]);
+        const token = await this.getTokens(user.userId, user.email)
+        await this.updateRtHash(user.userId, token.refresh_token)
+        return token;
+    }
 
-    return {
-      access_token: at,
-      refresh_token: rt,
-    };
-  }
+    async logout(userId: number) {
+        await this.usersService.update(userId, { refreshToken: null });
+        return true;
+    }
 }
