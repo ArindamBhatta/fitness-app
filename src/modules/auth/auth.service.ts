@@ -1,10 +1,11 @@
 import { JwtService } from "@nestjs/jwt";
 import { UsersService } from "../users/users.service";
 import { SignupDto } from "./dto/signup.dto";
-import { Tokens } from "./types/tokens.type";
+import { AuthResponse, AuthUser, Tokens } from "./types/tokens.type";
 import { BadRequestException, ForbiddenException, Injectable } from "@nestjs/common";
 import * as bcrypt from 'bcrypt';
 import { LoginDto } from "./dto/login.dto";
+import { User } from "../users/entities/user.entity";
 
 
 @Injectable()
@@ -51,9 +52,22 @@ export class AuthService {
         await this.usersService.update(userId, { refreshToken: hash });
     }
 
+    private buildAuthUser(user: User): AuthUser {
+        return {
+            userId: user.userId,
+            fullName: user.fullName,
+            email: user.email,
+            phone: user.phone,
+            address: user.address,
+            dateOfBirth: user.dateOfBirth ?? null,
+            aadhaarNumber: user.aadhaarNumber ?? null,
+            pincode: typeof user.pincode === 'number' ? user.pincode : user.pincode?.id ?? null,
+        };
+    }
 
 
-    async signUp(dto: SignupDto) {
+
+    async signUp(dto: SignupDto): Promise<AuthResponse> {
         const existingUser = await this.usersService.findByEmail(dto.email);
         if (existingUser) {
             throw new BadRequestException("User already exist");
@@ -62,17 +76,23 @@ export class AuthService {
         const hashPassword: string = await this.hashData(dto.password);
 
         const newUser = await this.usersService.create({
+            fullName: dto.fullName,
             email: dto.email,
-            password: hashPassword
+            password: hashPassword,
+            phone: dto.phone,
+            address: dto.address,
         });
 
         const token = await this.getTokens(newUser.userId, newUser.email);
         await this.updateRtHash(newUser.userId, token.refresh_token)
 
-        return token;
+        return {
+            user: this.buildAuthUser(newUser),
+            tokens: token,
+        };
     }
 
-    async login(dto: LoginDto): Promise<Tokens> {
+    async login(dto: LoginDto): Promise<AuthResponse> {
         const user = await this.usersService.findByEmail(dto.email);
         if (!user) throw new ForbiddenException('Access Denied');
 
@@ -82,7 +102,10 @@ export class AuthService {
 
         const token = await this.getTokens(user.userId, user.email)
         await this.updateRtHash(user.userId, token.refresh_token)
-        return token;
+        return {
+            user: this.buildAuthUser(user),
+            tokens: token,
+        };
     }
 
     async logout(userId: number) {
@@ -90,7 +113,7 @@ export class AuthService {
         return true;
     }
 
-    async refreshTokens(userId: number, rt: string) {
+    async refreshTokens(userId: number, rt: string): Promise<AuthResponse> {
         const user = await this.usersService.findById(userId);
         if (!user || !user.refreshToken) throw new ForbiddenException('Access Denied');
 
@@ -99,6 +122,9 @@ export class AuthService {
 
         const token = await this.getTokens(user.userId, user.email);
         await this.updateRtHash(user.userId, token.refresh_token);
-        return token;
+        return {
+            user: this.buildAuthUser(user),
+            tokens: token,
+        };
     }
 }

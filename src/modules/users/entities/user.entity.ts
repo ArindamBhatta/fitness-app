@@ -13,6 +13,7 @@ export class User {
   @ApiProperty({ example: 'John Doe' })
   fullName: string;
 
+
   //Normal DB field
   @Column({ unique: true })
   @ApiProperty({ example: 'user@example.com' })
@@ -30,14 +31,14 @@ export class User {
   @ApiProperty({ example: '1990-01-01', nullable: true })
   dateOfBirth: string;
 
-  @Column({ name: 'aadhaar_number', unique: true })
-  @ApiProperty({ example: '1234-5678-9012' })
+  @Column({ name: 'aadhaar_number', unique: true, nullable: true })
+  @ApiProperty({ example: '1234-5678-9012', nullable: true })
   aadhaarNumber: string;
 
   @Column()
   @ApiProperty({ example: '123 Main St' })
   address: string;
-
+//many User rows can reference one Pincode row
   @ManyToOne(() => Pincode, { nullable: true })
   @JoinColumn({ name: 'pincode' })
   @ApiProperty({ type: () => Pincode, nullable: true })

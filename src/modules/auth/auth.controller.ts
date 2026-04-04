@@ -11,7 +11,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { AuthService } from './auth.service';
 import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
-import { Tokens } from './types/tokens.type';
+import { AuthResponse } from './types/tokens.type';
 import { AtGuard } from './guards/access_token.guard';
 import { RtGuard } from './guards/refresh_token.guard';
 
@@ -24,7 +24,7 @@ export class AuthController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Register a new user' })
   @ApiResponse({ status: 201, description: 'User successfully registered' })
-  signup(@Body() dto: SignupDto): Promise<Tokens> {
+  signup(@Body() dto: SignupDto): Promise<AuthResponse> {
     return this.authService.signUp(dto);
   }
 
@@ -32,7 +32,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login and receive tokens' })
   @ApiResponse({ status: 200, description: 'Successfully logged in' })
-  login(@Body() dto: LoginDto): Promise<Tokens> {
+  login(@Body() dto: LoginDto): Promise<AuthResponse> {
     return this.authService.login(dto);
   }
   //You must be logged in to log out.
@@ -51,7 +51,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Refresh access token using refresh token' })
-  refreshTokens(@Req() req: any) {
+  refreshTokens(@Req() req: any): Promise<AuthResponse> {
     const user = req.user;
     return this.authService.refreshTokens(user.sub, user.refreshToken);
   }
