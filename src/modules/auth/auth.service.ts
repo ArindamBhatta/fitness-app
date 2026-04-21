@@ -5,7 +5,11 @@ import { Tokens } from "./types/tokens.type";
 import { BadRequestException, ForbiddenException, Injectable } from "@nestjs/common";
 import * as bcrypt from 'bcrypt';
 import { LoginDto } from "./dto/login.dto";
-import { use } from "passport";
+import { User } from "../users/entities/user.entity";
+import { AuthUserResponseDto } from "./dto/auth-user-response.dto";
+import { AuthResponseDto } from "./dto/auth-response.dto";
+import { TokenResponseDto } from "./dto/token-response.dto";
+
 
 @Injectable()
 export class AuthService {
@@ -51,9 +55,30 @@ export class AuthService {
         await this.usersService.update(userId, { refreshToken: hash });
     }
 
+    private buildAuthUser(user: User): AuthUserResponseDto {
+        return {
+            userId: user.userId,
+            persona: user.persona,
+            fullName: user.fullName,
+            email: user.email,
+            phone: user.phone,
+            address: user.address,
+            dateOfBirth: user.dateOfBirth ?? null,
+            aadhaarNumber: user.aadhaarNumber ?? null,
+            pincode: typeof user.pincode === 'number' ? user.pincode : user.pincode?.id ?? null,
+        };
+    }
+
+    private buildTokenResponse(tokens: Tokens): TokenResponseDto {
+        return {
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token,
+        };
+    }
 
 
-    async signUp(dto: SignupDto) {
+
+    async signUp(dto: SignupDto): Promise<AuthResponseDto> {
         const existingUser = await this.usersService.findByEmail(dto.email);
         if (existingUser) {
             throw new BadRequestException("User already exist");
@@ -62,17 +87,24 @@ export class AuthService {
         const hashPassword: string = await this.hashData(dto.password);
 
         const newUser = await this.usersService.create({
+            fullName: dto.fullName,
             email: dto.email,
-            password: hashPassword
+            password: hashPassword,
+            phone: dto.phone,
+            address: dto.address,
+            persona: dto.persona,
         });
 
         const token = await this.getTokens(newUser.userId, newUser.email);
         await this.updateRtHash(newUser.userId, token.refresh_token)
 
-        return token;
+        return {
+            user: this.buildAuthUser(newUser),
+            tokens: this.buildTokenResponse(token),
+        };
     }
 
-    async login(dto: LoginDto): Promise<Tokens> {
+    async login(dto: LoginDto): Promise<AuthResponseDto> {
         const user = await this.usersService.findByEmail(dto.email);
         if (!user) throw new ForbiddenException('Access Denied');
 
@@ -82,7 +114,10 @@ export class AuthService {
 
         const token = await this.getTokens(user.userId, user.email)
         await this.updateRtHash(user.userId, token.refresh_token)
-        return token;
+        return {
+            user: this.buildAuthUser(user),
+            tokens: this.buildTokenResponse(token),
+        };
     }
 
     async logout(userId: number) {
@@ -90,20 +125,18 @@ export class AuthService {
         return true;
     }
 
-    async refreshTokens(userId: number, rt: string): Promise<Tokens> {
+    async refreshTokens(userId: number, rt: string): Promise<AuthResponseDto> {
         const user = await this.usersService.findById(userId);
-        if (!user || !user.refreshToken) {
-            throw new ForbiddenException('Access Denied');
-        }
+        if (!user || !user.refreshToken) throw new ForbiddenException('Access Denied');
 
         const rtMatches = await bcrypt.compare(rt, user.refreshToken);
-        if (!rtMatches) {
-            throw new ForbiddenException('Access Denied');
-        }
+        if (!rtMatches) throw new ForbiddenException('Access Denied');
 
-        const tokens = await this.getTokens(user.userId, user.email);
-        await this.updateRtHash(user.userId, tokens.refresh_token);
-
-        return tokens;
+        const token = await this.getTokens(user.userId, user.email);
+        await this.updateRtHash(user.userId, token.refresh_token);
+        return {
+            user: this.buildAuthUser(user),
+            tokens: this.buildTokenResponse(token),
+        };
     }
 }

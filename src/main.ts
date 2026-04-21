@@ -7,10 +7,11 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 async function bootstrap() {
   //Create Nest App (HTTP Server)
   const app = await NestFactory.create(AppModule); //
-  //🛡️ 4. Global Validation Pipe
+
+  //** 🛡️ 4. Global Validation Pipe for Blocks extra data fields from entering your database.
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,
-    transform: true,
+    transform: true, //Transform is for Simplicity (turn strings into the correct types automatically).
   }));
 
   const config = new DocumentBuilder()
@@ -19,12 +20,17 @@ async function bootstrap() {
     .setVersion('1.0')
     .addBearerAuth()
     .build();
+
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('doc', app, document);
 
-  const port = process.env.PORT ?? 3000;
+  const port = process.env.PORT ?? 8111;
   await app.listen(port);
   console.log(`Application is running on: http://localhost:${port}`);
   console.log(`Swagger documentation is available at: http://localhost:${port}/doc`);
 }
 bootstrap();
+
+/* 
+Middleware -> Guard -> Interceptor (before) -> Pipe -> Controller -> Service -> Interceptor (after) -> Filter (if error)
+*/

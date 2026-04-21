@@ -13,14 +13,14 @@ import { CandidatesModule } from './modules/candidates/candidates.module';
 
 
 @Module({
+  //1. imports = which modules are included
   imports: [
     TypeOrmModule.forRoot({
       type: 'postgres',
-      host: 'localhost',
-      port: 5432,
-      username: 'postgres',
-      password: '', // Assuming no password as per docker setup
-      database: 'job_tracker_db',
+      url: process.env.DATABASE_URL,
+      ssl: {
+        rejectUnauthorized: false,
+      },
       autoLoadEntities: true,
       synchronize: true,
       logging: ['query', 'error'],
@@ -33,9 +33,12 @@ import { CandidatesModule } from './modules/candidates/candidates.module';
     ApplicationsModule,
     CandidatesModule,
   ],
+  //2. controllers = which request handlers belong to this module
   controllers: [AppController],
+  //3. providers = which injectable classes belong to this module
   providers: [AppService],
 })
+//4. exports = which providers this module shares with other modules
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
